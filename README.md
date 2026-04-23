@@ -1,7 +1,7 @@
 # WayLens
 
 Wayfinder route overlay for Even Realities G2 smart glasses.
-Proof-of-concept for Acuity Brands Innovation Day: the Wayfinder SDK's
+Proof-of-concept for Acuity Q3 2026 Innovation Day: the Wayfinder SDK's
 route visualisation, rendered directly in the optics of the G2.
 
 Everything happens on the glasses — FROM/TO POI selection at MIA
@@ -45,9 +45,6 @@ Display is composed from:
 as PNG bytes, and pushed to the glasses via `updateImageRawData`.
 Step images are pre-rendered once per route and cached, so swipes
 reuse `textContainerUpgrade` + `updateImageRawData` (no layout rebuild).
-
-See [the plan](../.cursor/plans/waylens_g2_poc_cb0c175a.plan.md) for the
-full design.
 
 ## Project layout
 
@@ -154,39 +151,3 @@ npm run pack        # npm run build + evenhub pack app.json dist -o waylens.ehpk
 
 `waylens.ehpk` can be uploaded to the Even Hub developer portal for
 private-build testing, or submitted for public review.
-
-## Screens in the demo
-
-The build has been exercised end-to-end in the simulator. Representative
-frames:
-
-
-| Screen            | What it shows                                                   |
-| ----------------- | --------------------------------------------------------------- |
-| Home              | Title, instructions for temple/ring input                       |
-| FROM / TO list    | Scrollable list of 15 MIA Terminal D POIs with category glyphs  |
-| Overview          | Header, full-route corridor image, distance/time, hint to swipe |
-| Step 1            | "Exit D30, turn left" with zoomed 3-gate slice + left chevron   |
-| Step 2            | "Continue west past D20" - 320 m segment                        |
-| Step 3            | "Pass D15, Starbucks on the right" - 280 m segment              |
-| Step 4            | "Arrive at Starbucks" - 80 m approach                           |
-| Arrived           | Completion summary and exit hint                                |
-| Route unavailable | Fallback when the selected pair is not the demo route           |
-
-
-## Extending beyond the POC
-
-This demo is deliberately the bare minimum. To make it production-ready:
-
-- Replace the hardcoded POI/route data with a live subscription to the
-Wayfinder iOS SDK's navigation stream (`LLNavigationPath`,
-`LLWaypoint`, `LLNavigationPoint`).
-- Stream real position updates from `LLPositionManager` (or the Atrius
-Navigator/Locator SDK) to re-render the step image when the user's
-waypoint changes, so the glasses track the wearer in real time.
-- Add venue selection (currently hardcoded to MIA Terminal D) and
-multi-floor support (the Wayfinder `LLFloor` model + a small chrome
-in the step header).
-- Use `bridge.imuControl` to orient the corridor view to the user's
-heading — the IMU data is already exposed by the SDK.
-
