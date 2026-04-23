@@ -5,8 +5,12 @@ export const GREY = {
   WHITE: '#ffffff',
 } as const
 
-export const IMAGE_WIDTH = 288
+// Full scene canvas - we render at 576x144 and slice into two 288x144 tiles
+// that sit side-by-side on the glasses for twice the horizontal pixel area.
+export const IMAGE_WIDTH = 576
 export const IMAGE_HEIGHT = 144
+export const TILE_WIDTH = 288
+export const TILE_HEIGHT = 144
 
 export function createCanvas(width: number, height: number): HTMLCanvasElement {
   const c = document.createElement('canvas')

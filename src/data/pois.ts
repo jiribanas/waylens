@@ -1,5 +1,5 @@
 import type { POI } from '../types'
-import { gateCenter, poiCenter } from '../rendering/world'
+import { gateCenter, poiCenter } from '../rendering/mia'
 
 const GATE_GLYPH = '>'
 const LOUNGE_GLYPH = '#'

@@ -1,34 +1,27 @@
 import type { Route } from '../types'
-import { canvasToPngBytes } from './canvasUtils'
-import { createSceneCanvas, drawScene } from './corridor'
-import { boundsOfPoints } from './world'
+import type { SceneTiles } from './scenes/common'
+import { renderStep1Scene } from './scenes/step1'
+import { renderStep2Scene } from './scenes/step2'
+import { renderStep3Scene } from './scenes/step3'
+import { renderStep4Scene } from './scenes/step4'
 
-export async function renderStepImage(route: Route, stepIndex: number): Promise<Uint8Array> {
-  const canvas = createSceneCanvas()
-  const ctx = canvas.getContext('2d')
-  if (!ctx) throw new Error('2D context unavailable')
-
-  const step = route.steps[stepIndex]
-  if (!step) throw new Error(`Invalid step index: ${stepIndex}`)
-
-  const viewport = boundsOfPoints(step.waypoints, 24)
-
-  const isLast = stepIndex === route.steps.length - 1
-  const labelWhitelist = isLast ? new Set([route.toId]) : new Set<string>()
-
-  drawScene(ctx, {
-    viewport,
-    route,
-    activeStepIndex: stepIndex,
-    showLabels: true,
-    labelWhitelist,
-  })
-
-  return canvasToPngBytes(canvas)
+export async function renderStepImage(_route: Route, stepIndex: number): Promise<SceneTiles> {
+  switch (stepIndex) {
+    case 0:
+      return renderStep1Scene()
+    case 1:
+      return renderStep2Scene()
+    case 2:
+      return renderStep3Scene()
+    case 3:
+      return renderStep4Scene()
+    default:
+      throw new Error(`No scene defined for step index ${stepIndex}`)
+  }
 }
 
-export async function renderAllStepImages(route: Route): Promise<Uint8Array[]> {
-  const images: Uint8Array[] = []
+export async function renderAllStepImages(route: Route): Promise<SceneTiles[]> {
+  const images: SceneTiles[] = []
   for (let i = 0; i < route.steps.length; i++) {
     images.push(await renderStepImage(route, i))
   }
