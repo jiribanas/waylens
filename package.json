@@ -1,0 +1,26 @@
+{
+  "name": "waylens",
+  "version": "0.1.0",
+  "description": "WayLens - Wayfinder POC for Even Realities G2 smart glasses",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "qr": "evenhub qr --url http://$(ipconfig getifaddr en0):5173",
+    "pack": "npm run build && evenhub pack app.json dist -o waylens.ehpk",
+    "sim": "evenhub-simulator http://localhost:5173"
+  },
+  "dependencies": {
+    "@evenrealities/even_hub_sdk": "^0.0.10"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "vite": "^6.0.0"
+  },
+  "engines": {
+    "node": "^20.0.0 || >=22.0.0"
+  }
+}

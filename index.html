@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WayLens</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      }
+      html, body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background: #0b0b0e;
+        color: #e7e7ea;
+      }
+      #app {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        padding: 24px;
+        text-align: center;
+        gap: 12px;
+      }
+      .brand {
+        font-size: 28px;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+      }
+      .tag {
+        font-size: 14px;
+        opacity: 0.7;
+        max-width: 320px;
+        line-height: 1.4;
+      }
+      .status {
+        margin-top: 16px;
+        font-size: 13px;
+        padding: 8px 14px;
+        border-radius: 999px;
+        background: rgba(120, 180, 255, 0.12);
+        color: #9ec7ff;
+      }
+      .status[data-state="error"] {
+        background: rgba(255, 120, 120, 0.14);
+        color: #ff9e9e;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <div class="brand">WAYLENS</div>
+      <div class="tag">
+        Wayfinder route overlay for Even Realities G2 glasses.
+        Interact with the glasses (temple or R1 ring).
+      </div>
+      <div id="status" class="status">Waiting for glasses bridge...</div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
