@@ -1,6 +1,7 @@
 import type { Route } from '../types'
 import { canvasToPngBytes } from './canvasUtils'
-import { createSceneCanvas, drawCorridorScene } from './corridor'
+import { createSceneCanvas, drawScene } from './corridor'
+import { boundsOfPoints } from './world'
 
 export async function renderStepImage(route: Route, stepIndex: number): Promise<Uint8Array> {
   const canvas = createSceneCanvas()
@@ -10,21 +11,17 @@ export async function renderStepImage(route: Route, stepIndex: number): Promise<
   const step = route.steps[stepIndex]
   if (!step) throw new Error(`Invalid step index: ${stepIndex}`)
 
-  const centerX = (step.fromX + step.toX) / 2
-  const zoomHalf = Math.max(4, Math.abs(step.toX - step.fromX) / 2 + 3)
-  const minX = Math.max(0, centerX - zoomHalf)
-  const maxX = Math.min(60, centerX + zoomHalf)
-  const span = maxX - minX
-  const tickEveryGates = span <= 10 ? 2 : span <= 20 ? 5 : 10
+  const viewport = boundsOfPoints(step.waypoints, 24)
 
-  const arrow = step.direction === 'left' ? '<' : step.direction === 'right' ? '>' : step.direction === 'arrive' ? '*' : '->'
-  drawCorridorScene(ctx, {
-    window: { minX, maxX },
+  const isLast = stepIndex === route.steps.length - 1
+  const labelWhitelist = isLast ? new Set([route.toId]) : new Set<string>()
+
+  drawScene(ctx, {
+    viewport,
     route,
     activeStepIndex: stepIndex,
-    title: `${arrow} Step ${stepIndex + 1}/${route.steps.length}`,
-    subtitle: `${step.distanceM} m`,
-    tickEveryGates,
+    showLabels: true,
+    labelWhitelist,
   })
 
   return canvasToPngBytes(canvas)

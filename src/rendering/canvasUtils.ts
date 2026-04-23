@@ -5,8 +5,8 @@ export const GREY = {
   WHITE: '#ffffff',
 } as const
 
-export const IMAGE_WIDTH = 200
-export const IMAGE_HEIGHT = 100
+export const IMAGE_WIDTH = 288
+export const IMAGE_HEIGHT = 144
 
 export function createCanvas(width: number, height: number): HTMLCanvasElement {
   const c = document.createElement('canvas')

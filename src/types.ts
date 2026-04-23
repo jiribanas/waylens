@@ -1,11 +1,16 @@
 export type POICategory = 'gate' | 'lounge' | 'cafe' | 'restaurant'
 
+export interface Point2D {
+  x: number
+  y: number
+}
+
 export interface POI {
   id: string
   name: string
   shortName: string
   category: POICategory
-  corridorX: number
+  position: Point2D
   glyph: string
 }
 
@@ -15,8 +20,7 @@ export interface RouteStep {
   instruction: string
   direction: StepDirection
   distanceM: number
-  fromX: number
-  toX: number
+  waypoints: Point2D[]
 }
 
 export interface Route {

@@ -12,8 +12,10 @@ export const FOOTER_CONTAINER_NAME = 'ftr'
 export const IMAGE_CONTAINER_ID = 10
 export const IMAGE_CONTAINER_NAME = 'map'
 
-export const IMAGE_X = Math.round((576 - 200) / 2)
-export const IMAGE_Y = 64
+export const IMAGE_WIDTH = 288
+export const IMAGE_HEIGHT = 144
+export const IMAGE_X = Math.round((576 - IMAGE_WIDTH) / 2)
+export const IMAGE_Y = 52
 
 let lastPushedKey: string | null = null
 
@@ -50,9 +52,9 @@ export function buildRouteLayout(headerText: string, footerText: string): RouteL
 
   const header = new TextContainerProperty({
     xPosition: 0,
-    yPosition: 8,
+    yPosition: 4,
     width: 576,
-    height: 40,
+    height: 36,
     borderWidth: 0,
     borderColor: 5,
     borderRadius: 0,
@@ -65,9 +67,9 @@ export function buildRouteLayout(headerText: string, footerText: string): RouteL
 
   const footer = new TextContainerProperty({
     xPosition: 0,
-    yPosition: 232,
+    yPosition: 244,
     width: 576,
-    height: 48,
+    height: 40,
     borderWidth: 0,
     borderColor: 5,
     borderRadius: 0,
@@ -81,8 +83,8 @@ export function buildRouteLayout(headerText: string, footerText: string): RouteL
   const image = new ImageContainerProperty({
     xPosition: IMAGE_X,
     yPosition: IMAGE_Y,
-    width: 200,
-    height: 100,
+    width: IMAGE_WIDTH,
+    height: IMAGE_HEIGHT,
     containerID: IMAGE_CONTAINER_ID,
     containerName: IMAGE_CONTAINER_NAME,
   })
