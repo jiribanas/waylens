@@ -1,0 +1,1495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>WayLens · Ambient Wayfinding on Smart Glasses</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,700;0,9..144,900;1,9..144,500&family=Inter+Tight:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --phosphor: #39ff7a;
+  --phosphor-dim: #1d8e42;
+  --phosphor-deep: #0b3a1c;
+  --phosphor-glow: rgba(57, 255, 122, 0.35);
+  --bg: #050806;
+  --bg-2: #0a0f0c;
+  --bg-3: #101814;
+  --ink: #d7f5e3;
+  --ink-dim: #8ab09a;
+  --ink-faint: #4a6a58;
+  --amber: #ffb347;
+  --danger: #ff5a5a;
+  --grid: rgba(57, 255, 122, 0.08);
+  --scanline: rgba(57, 255, 122, 0.04);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Inter Tight', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  cursor: default;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 48px 48px;
+  pointer-events: none;
+  z-index: 1;
+  mask-image: radial-gradient(ellipse at center, black 40%, transparent 85%);
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 2px,
+    var(--scanline) 2px,
+    var(--scanline) 3px
+  );
+  pointer-events: none;
+  z-index: 2;
+  mix-blend-mode: overlay;
+}
+
+.deck { position: relative; width: 100vw; height: 100vh; z-index: 3; }
+
+.slide {
+  position: absolute;
+  inset: 0;
+  padding: 56px 88px;
+  display: flex;
+  flex-direction: column;
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(1.02);
+  transition: opacity 0.6s ease, transform 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+  overflow: hidden;
+}
+.slide.active {
+  opacity: 1;
+  pointer-events: auto;
+  transform: scale(1);
+}
+
+/* ============ SHARED CHROME ============ */
+
+.chrome {
+  position: fixed;
+  z-index: 50;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--phosphor);
+  opacity: 0.7;
+  pointer-events: none;
+}
+.chrome.tl { top: 20px; left: 28px; }
+.chrome.tr { top: 20px; right: 28px; text-align: right; }
+.chrome.bl { bottom: 20px; left: 28px; }
+.chrome.br { bottom: 20px; right: 28px; text-align: right; }
+
+.chrome .dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  background: var(--phosphor);
+  border-radius: 50%;
+  box-shadow: 0 0 10px var(--phosphor-glow);
+  margin-right: 6px;
+  vertical-align: middle;
+  animation: blink 2s infinite;
+}
+@keyframes blink {
+  0%, 70% { opacity: 1; }
+  71%, 100% { opacity: 0.15; }
+}
+
+.progress {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--bg-3);
+  z-index: 51;
+}
+.progress-bar {
+  height: 100%;
+  background: var(--phosphor);
+  box-shadow: 0 0 14px var(--phosphor-glow);
+  transition: width 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+  width: 0%;
+}
+
+.counter {
+  font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============ TYPOGRAPHY ============ */
+
+.eyebrow {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 16px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--phosphor);
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.eyebrow::before {
+  content: '';
+  width: 32px;
+  height: 1px;
+  background: var(--phosphor);
+}
+
+.headline {
+  font-family: 'Fraunces', serif;
+  font-weight: 300;
+  line-height: 0.95;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+.headline em {
+  font-style: italic;
+  font-weight: 500;
+  color: var(--phosphor);
+  text-shadow: 0 0 20px var(--phosphor-glow);
+}
+
+.lede {
+  font-family: 'Fraunces', serif;
+  font-weight: 300;
+  font-size: 28px;
+  line-height: 1.4;
+  color: var(--ink-dim);
+  max-width: 780px;
+  margin-top: 28px;
+}
+
+/* ============ SLIDE 1: TITLE ============ */
+
+.s1 { justify-content: center; align-items: flex-start; }
+.s1-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 18px;
+  margin-bottom: 40px;
+}
+.s1-logo {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 800;
+  font-size: 16px;
+  letter-spacing: 0.3em;
+  color: var(--phosphor);
+  padding: 6px 12px;
+  border: 1px solid var(--phosphor);
+  text-shadow: 0 0 12px var(--phosphor-glow);
+}
+.s1-meta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.s1-title {
+  font-family: 'Fraunces', serif;
+  font-weight: 300;
+  font-size: clamp(72px, 13vw, 200px);
+  line-height: 0.88;
+  letter-spacing: -0.035em;
+  color: var(--ink);
+}
+.s1-title .way { font-style: italic; font-weight: 500; }
+.s1-title .lens {
+  color: var(--phosphor);
+  text-shadow: 0 0 40px var(--phosphor-glow);
+}
+.s1-sub {
+  font-family: 'Fraunces', serif;
+  font-style: italic;
+  font-weight: 300;
+  font-size: 34px;
+  color: var(--ink-dim);
+  margin-top: 32px;
+  max-width: 900px;
+  line-height: 1.3;
+}
+
+.s1-footer {
+  position: absolute;
+  bottom: 56px;
+  left: 88px;
+  right: 88px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.s1-footer strong { color: var(--ink); font-weight: 500; }
+
+.reticle {
+  position: absolute;
+  top: 50%;
+  right: 88px;
+  transform: translateY(-50%);
+  width: 260px;
+  height: 260px;
+  opacity: 0.55;
+}
+.reticle svg { width: 100%; height: 100%; }
+.reticle .ring { animation: spin 18s linear infinite; transform-origin: center; }
+.reticle .ring.slow { animation-duration: 40s; animation-direction: reverse; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ============ SLIDE 2: THE PROBLEM ============ */
+
+.s2 { justify-content: center; }
+.s2-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 80px;
+  align-items: center;
+  width: 100%;
+}
+.s2-quote {
+  font-family: 'Fraunces', serif;
+  font-weight: 300;
+  font-size: clamp(44px, 5.2vw, 78px);
+  line-height: 1.02;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+.s2-quote em {
+  font-style: italic;
+  color: var(--phosphor);
+}
+.s2-quote .strike {
+  position: relative;
+  color: var(--ink-faint);
+}
+.s2-quote .strike::after {
+  content: '';
+  position: absolute;
+  left: -2%;
+  right: -2%;
+  top: 52%;
+  height: 3px;
+  background: var(--danger);
+  transform: rotate(-2deg);
+}
+
+.s2-panel {
+  border: 1px solid var(--phosphor-deep);
+  background: linear-gradient(180deg, rgba(16, 24, 20, 0.6), rgba(10, 15, 12, 0.3));
+  padding: 32px;
+  position: relative;
+}
+.s2-panel::before {
+  content: 'ESTIMATED FRICTION';
+  position: absolute;
+  top: -8px;
+  left: 24px;
+  background: var(--bg);
+  padding: 0 12px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  letter-spacing: 0.2em;
+  color: var(--phosphor);
+}
+.friction-row {
+  display: flex;
+  align-items: baseline;
+  gap: 20px;
+  padding: 18px 0;
+  border-bottom: 1px dashed var(--phosphor-deep);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 16px;
+  color: var(--ink-dim);
+  line-height: 1.4;
+}
+.friction-row:last-child { border-bottom: none; }
+.friction-row .num {
+  color: var(--phosphor);
+  font-weight: 700;
+  font-size: 30px;
+  min-width: 72px;
+}
+.friction-row .unit {
+  color: var(--ink-faint);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+}
+
+/* ============ SLIDE 3: THE OPPORTUNITY ============ */
+
+.s3 { align-items: center; justify-content: center; }
+.s3-inner {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 72px;
+  width: 100%;
+  align-items: center;
+}
+.s3-img {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border: 1px solid var(--phosphor-deep);
+}
+.s3-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: contrast(1.05) saturate(0.9);
+}
+.s3-img::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, transparent 40%, rgba(5, 8, 6, 0.85) 100%),
+    radial-gradient(circle at 30% 40%, rgba(57, 255, 122, 0.12), transparent 50%);
+  pointer-events: none;
+}
+.s3-img .tag {
+  position: absolute;
+  bottom: 18px;
+  left: 18px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--phosphor);
+  z-index: 2;
+}
+.s3-img .crosshair {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--phosphor);
+  opacity: 0.7;
+}
+.s3-img .crosshair::before,
+.s3-img .crosshair::after {
+  content: '';
+  position: absolute;
+  background: var(--phosphor);
+}
+.s3-img .crosshair::before { top: 50%; left: 0; right: 0; height: 1px; transform: translateY(-50%); }
+.s3-img .crosshair::after { left: 50%; top: 0; bottom: 0; width: 1px; transform: translateX(-50%); }
+
+.s3-text .headline { font-size: clamp(44px, 5vw, 72px); }
+
+/* ============ SLIDE 4: SOLUTION ============ */
+
+.s4 { justify-content: center; }
+.s4-grid {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 60px;
+  align-items: center;
+}
+.s4-text .headline { font-size: clamp(44px, 5vw, 76px); }
+.s4-features {
+  margin-top: 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.feat {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  padding: 12px 0;
+  border-top: 1px solid var(--phosphor-deep);
+}
+.feat-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  color: var(--phosphor);
+  letter-spacing: 0.15em;
+  padding-top: 4px;
+  min-width: 52px;
+}
+.feat-body h4 {
+  font-family: 'Fraunces', serif;
+  font-weight: 500;
+  font-size: 26px;
+  color: var(--ink);
+  margin-bottom: 6px;
+  letter-spacing: -0.01em;
+}
+.feat-body p {
+  font-size: 17px;
+  color: var(--ink-dim);
+  line-height: 1.45;
+}
+
+.s4-glass {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid var(--phosphor-deep);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5), inset 0 0 60px rgba(0, 0, 0, 0.6);
+}
+.s4-glass img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.s4-glass::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 65% 45%, transparent 30%, rgba(5, 8, 6, 0.6) 80%);
+}
+
+/* ============ SLIDES 5-9: IMAGE-LED DEMO (one screen per slide) ============ */
+
+.demo-slide {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr;
+  align-items: center;
+  padding: 80px 0 80px 88px;
+  gap: 60px;
+}
+
+.demo-text {
+  max-width: 560px;
+  padding-right: 30px;
+}
+
+.demo-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 18px;
+  letter-spacing: 0.3em;
+  color: var(--phosphor);
+  margin-bottom: 32px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  text-transform: uppercase;
+}
+.demo-num::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--phosphor);
+  opacity: 0.4;
+}
+
+.demo-headline {
+  font-family: 'Fraunces', serif;
+  font-weight: 300;
+  font-size: clamp(72px, 8vw, 130px);
+  line-height: 0.92;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+}
+.demo-headline em {
+  font-style: italic;
+  font-weight: 500;
+  color: var(--phosphor);
+  text-shadow: 0 0 30px var(--phosphor-glow);
+}
+
+.demo-caption {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 18px;
+  letter-spacing: 0.18em;
+  color: var(--ink-dim);
+  text-transform: uppercase;
+  margin-top: 36px;
+  line-height: 1.6;
+}
+
+.demo-media {
+  position: relative;
+  height: 78vh;
+  width: 100%;
+  overflow: hidden;
+}
+.demo-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+.demo-media::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(5, 8, 6, 0.55) 0%, transparent 15%, transparent 85%, rgba(5, 8, 6, 0.3) 100%);
+  pointer-events: none;
+}
+
+/* ============ SLIDE 6: DESIGN CONSTRAINTS ============ */
+
+.s6 { justify-content: center; }
+.s6-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.1fr;
+  gap: 70px;
+  align-items: center;
+}
+.s6-text .headline { font-size: clamp(40px, 4.5vw, 62px); }
+
+.spec-list {
+  margin-top: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.spec {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 20px;
+  align-items: baseline;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px dashed var(--phosphor-deep);
+}
+.spec dt {
+  color: var(--phosphor);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 14px;
+}
+.spec dd {
+  color: var(--ink-dim);
+  line-height: 1.5;
+}
+.spec dd strong { color: var(--ink); font-weight: 500; }
+
+.display-demo {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: #000;
+  border: 1px solid var(--phosphor-deep);
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+.display-demo-label {
+  position: absolute;
+  top: 12px;
+  left: 14px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--phosphor);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+.display-canvas {
+  width: 100%;
+  aspect-ratio: 576 / 144;
+  background: #000;
+  border: 1px solid var(--phosphor-deep);
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.display-canvas .tile {
+  position: relative;
+  border-right: 1px dashed rgba(57, 255, 122, 0.2);
+}
+.display-canvas .tile:last-child { border-right: none; }
+.display-canvas .tile::after {
+  content: attr(data-label);
+  position: absolute;
+  bottom: 4px;
+  left: 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: var(--phosphor);
+  opacity: 0.5;
+}
+.display-canvas svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+.display-spec {
+  margin-top: 20px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+}
+.display-spec span:last-child { color: var(--phosphor); }
+
+/* ============ SLIDE 7: ARCHITECTURE ============ */
+
+.s7 .eyebrow { justify-content: flex-start; }
+.s7-headline { font-size: clamp(40px, 4.5vw, 62px); margin-bottom: 36px; max-width: 900px; }
+
+.arch {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  flex: 1;
+  min-height: 0;
+}
+.arch-col {
+  border: 1px solid var(--phosphor-deep);
+  background: linear-gradient(180deg, rgba(16, 24, 20, 0.5), rgba(10, 15, 12, 0.2));
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+.arch-col::before {
+  content: attr(data-layer);
+  position: absolute;
+  top: -8px;
+  left: 20px;
+  background: var(--bg);
+  padding: 0 10px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  letter-spacing: 0.18em;
+  color: var(--phosphor);
+}
+.arch-col h4 {
+  font-family: 'Fraunces', serif;
+  font-weight: 500;
+  font-size: 30px;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  margin-bottom: 10px;
+  margin-top: 10px;
+}
+.arch-col .sub {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  color: var(--ink-faint);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  margin-bottom: 24px;
+}
+.arch-col ul {
+  list-style: none;
+  flex: 1;
+}
+.arch-col li {
+  padding: 12px 0;
+  border-top: 1px dashed var(--phosphor-deep);
+  font-size: 17px;
+  color: var(--ink-dim);
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  line-height: 1.45;
+}
+.arch-col li::before {
+  content: '→';
+  color: var(--phosphor);
+  font-family: 'JetBrains Mono', monospace;
+  flex-shrink: 0;
+}
+.arch-col li strong { color: var(--ink); font-weight: 500; }
+
+/* ============ SLIDE 8: SCOPE ============ */
+
+.s8 { justify-content: center; }
+.s8-headline { font-size: clamp(40px, 4.5vw, 64px); margin-bottom: 40px; }
+.scope-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+}
+.scope-col {
+  padding: 28px;
+  position: relative;
+}
+.scope-col.in { border: 1px solid var(--phosphor); box-shadow: inset 0 0 40px rgba(57, 255, 122, 0.06); }
+.scope-col.out { border: 1px dashed var(--ink-faint); opacity: 0.7; }
+.scope-col h4 {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 16px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  margin-bottom: 26px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.scope-col.in h4 { color: var(--phosphor); }
+.scope-col.out h4 { color: var(--ink-faint); }
+.scope-col h4::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: currentColor;
+  opacity: 0.4;
+}
+.scope-col ul { list-style: none; display: flex; flex-direction: column; gap: 14px; }
+.scope-col li {
+  font-family: 'Fraunces', serif;
+  font-size: 24px;
+  font-weight: 400;
+  color: var(--ink);
+  display: flex;
+  gap: 14px;
+  align-items: baseline;
+  line-height: 1.3;
+}
+.scope-col.in li::before {
+  content: '✓';
+  color: var(--phosphor);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 18px;
+  font-weight: 700;
+}
+.scope-col.out li::before {
+  content: '○';
+  color: var(--ink-faint);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 18px;
+}
+.scope-col.out li { color: var(--ink-dim); }
+
+/* ============ SLIDE 9: FUTURE VISION ============ */
+
+.s9 { justify-content: center; }
+.s9-headline { font-size: clamp(48px, 6vw, 92px); max-width: 1100px; margin-bottom: 56px; }
+.venues {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 14px;
+}
+.venue {
+  border: 1px solid var(--phosphor-deep);
+  padding: 22px 18px;
+  background: linear-gradient(180deg, rgba(16, 24, 20, 0.3), transparent);
+  position: relative;
+  aspect-ratio: 3 / 4;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+}
+.venue::before {
+  content: attr(data-code);
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  color: var(--phosphor);
+  letter-spacing: 0.1em;
+  opacity: 0.65;
+}
+.venue .glyph {
+  width: 68px;
+  height: 68px;
+  color: var(--phosphor);
+  margin-top: 20px;
+}
+.venue .glyph svg { width: 100%; height: 100%; }
+.venue h5 {
+  font-family: 'Fraunces', serif;
+  font-weight: 500;
+  font-size: 28px;
+  color: var(--ink);
+  margin-bottom: 8px;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+}
+.venue p {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  color: var(--ink-faint);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  line-height: 1.4;
+}
+
+/* ============ SLIDE 10: CLOSING ============ */
+
+.s10 { justify-content: center; }
+.s10-grid {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 80px;
+  align-items: center;
+}
+.s10-text .eyebrow { justify-content: flex-start; }
+.s10-headline {
+  font-family: 'Fraunces', serif;
+  font-weight: 300;
+  font-size: clamp(52px, 6.5vw, 108px);
+  line-height: 0.92;
+  letter-spacing: -0.035em;
+  color: var(--ink);
+}
+.s10-headline em { font-style: italic; color: var(--phosphor); text-shadow: 0 0 30px var(--phosphor-glow); }
+.s10-sig {
+  margin-top: 48px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 15px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.s10-sig strong { color: var(--phosphor); font-weight: 700; }
+
+.s10-visual {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.s10-visual svg { width: 100%; height: 100%; }
+
+/* ============ ANIMATIONS ============ */
+
+.slide.active .anim-in {
+  animation: fadeUp 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.slide.active .anim-in.d1 { animation-delay: 0.15s; }
+.slide.active .anim-in.d2 { animation-delay: 0.28s; }
+.slide.active .anim-in.d3 { animation-delay: 0.41s; }
+.slide.active .anim-in.d4 { animation-delay: 0.54s; }
+.slide.active .anim-in.d5 { animation-delay: 0.67s; }
+.slide.active .anim-in.d6 { animation-delay: 0.80s; }
+.slide.active .anim-in.d7 { animation-delay: 0.93s; }
+.slide.active .anim-in.d8 { animation-delay: 1.06s; }
+.slide.active .anim-in.d9 { animation-delay: 1.19s; }
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(22px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.slide.active .anim-scale {
+  animation: scaleIn 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: 0.3s;
+}
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.94); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* ============ HELP OVERLAY ============ */
+
+.help {
+  position: fixed;
+  bottom: 44px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  z-index: 52;
+  display: flex;
+  gap: 20px;
+  opacity: 0.6;
+  pointer-events: none;
+}
+.help kbd {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid var(--ink-faint);
+  color: var(--ink-dim);
+  font-family: inherit;
+  font-size: 9px;
+  border-radius: 2px;
+  margin-right: 4px;
+}
+
+/* Smaller screen fallback */
+@media (max-width: 1100px) {
+  .slide { padding: 40px 48px; }
+  .s1-footer { left: 48px; right: 48px; }
+  .s2-grid, .s3-inner, .s4-grid, .s6-grid, .s10-grid { grid-template-columns: 1fr; gap: 36px; }
+  .flow, .arch, .venues { grid-template-columns: 1fr 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- SHARED CHROME -->
+<div class="chrome tl"><span class="dot"></span>WAYLENS · INNOVATION DAY · Q3 2026</div>
+<div class="chrome br"><span class="counter" id="counter">01 / 14</span></div>
+
+<div class="help">
+  <span><kbd>→</kbd> next</span>
+  <span><kbd>←</kbd> back</span>
+  <span><kbd>F</kbd> fullscreen</span>
+</div>
+
+<div class="progress"><div class="progress-bar" id="progressBar"></div></div>
+
+<div class="deck">
+
+  <!-- ========== SLIDE 1: TITLE ========== -->
+  <section class="slide s1 active" data-slide="1">
+    <div class="s1-brand anim-in d1">
+      <span class="s1-logo">WAYLENS</span>
+      <span class="s1-meta">ACUITY INNOVATION DAY · Q3 2026</span>
+    </div>
+    <h1 class="s1-title anim-in d2">
+      <span class="way">Way</span><span class="lens">finding</span>,<br/>
+      <em>with smart glasses</em>
+    </h1>
+    <p class="s1-sub anim-in d3">
+      A technical proof of concept extension of Acuity Wayfinder onto Even&nbsp;Realities&nbsp;G2 optics.
+    </p>
+
+    <div class="reticle anim-scale">
+      <svg viewBox="0 0 200 200" fill="none" stroke="currentColor" stroke-width="0.8" style="color: var(--phosphor);">
+        <g class="ring">
+          <circle cx="100" cy="100" r="94" stroke-dasharray="2 6" opacity="0.6"/>
+          <path d="M100 6 L100 22 M100 178 L100 194 M6 100 L22 100 M178 100 L194 100" stroke-width="1.2"/>
+        </g>
+        <g class="ring slow">
+          <circle cx="100" cy="100" r="72" stroke-dasharray="1 4" opacity="0.8"/>
+          <circle cx="100" cy="100" r="54" opacity="0.4"/>
+        </g>
+        <circle cx="100" cy="100" r="3" fill="currentColor"/>
+        <circle cx="100" cy="100" r="36" stroke-dasharray="60 200" opacity="0.9"/>
+        <text x="100" y="40" font-family="JetBrains Mono" font-size="6" text-anchor="middle" fill="currentColor" letter-spacing="1">N</text>
+        <text x="100" y="166" font-family="JetBrains Mono" font-size="6" text-anchor="middle" fill="currentColor" letter-spacing="1">S</text>
+        <text x="34" y="102" font-family="JetBrains Mono" font-size="6" text-anchor="middle" fill="currentColor" letter-spacing="1">W</text>
+        <text x="166" y="102" font-family="JetBrains Mono" font-size="6" text-anchor="middle" fill="currentColor" letter-spacing="1">E</text>
+      </svg>
+    </div>
+
+    <div class="s1-footer anim-in d4">
+      <div><strong>JIRI BANAS</strong> · SOFTWARE ENGINEERING LEAD</div>
+    </div>
+  </section>
+
+  <!-- ========== SLIDE 2: THE PROBLEM ========== -->
+  <section class="slide s2" data-slide="2">
+    <div class="s2-grid">
+      <div>
+        <div class="eyebrow anim-in d1">01 · The problem</div>
+        <h2 class="s2-quote anim-in d2">
+          Every time a traveler<br/>
+          <span class="strike">looks down at their phone,</span><br/>
+          they <em>break stride.</em>
+        </h2>
+      </div>
+
+      <div class="s2-panel anim-in d3">
+        <div class="friction-row"><span class="num">11×</span><div>glances at the phone<br/><span class="unit">per average terminal transit</span></div></div>
+        <div class="friction-row"><span class="num">3.2s</span><div>avg. time lost per glance<br/><span class="unit">stop &middot; orient &middot; resume</span></div></div>
+        <div class="friction-row"><span class="num">35s+</span><div>aggregate friction per trip<br/><span class="unit">and that is before a missed turn</span></div></div>
+        <div class="friction-row"><span class="num">2×</span><div>hands occupied<br/><span class="unit">bag, coffee, child, boarding pass</span></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== SLIDE 3: THE OPPORTUNITY ========== -->
+  <section class="slide s3" data-slide="3">
+    <div class="s3-inner">
+      <div class="s3-img anim-scale">
+        <img src="assets/hero-user.png" alt="Traveler wearing smart glasses in airport"/>
+        <div class="crosshair"></div>
+        <div class="tag">WAYLENS · EVEN REALITIES G2</div>
+      </div>
+      <div class="s3-text">
+        <div class="eyebrow anim-in d1">02 · The opportunity</div>
+        <h2 class="headline anim-in d2">
+          The guidance<br/>
+          moves <em>into the line<br/>of sight.</em>
+        </h2>
+        <p class="lede anim-in d3">
+          Smart glasses give us a surface we have never had before in wayfinding:
+          a persistent, glanceable, hands-free overlay that lives exactly where the traveler is already looking.
+        </p>
+        <p class="lede anim-in d4" style="font-size: 20px; font-family: 'JetBrains Mono', monospace; color: var(--phosphor); letter-spacing: 0.12em; margin-top: 36px;">
+          HEADS UP &nbsp;·&nbsp; HANDS FREE &nbsp;·&nbsp; AMBIENT
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== SLIDE 4: SOLUTION ========== -->
+  <section class="slide s4" data-slide="4">
+    <div class="s4-grid">
+      <div class="s4-text">
+        <div class="eyebrow anim-in d1">03 · The build</div>
+        <h2 class="headline anim-in d2">
+          Meet <em>WayLens.</em>
+        </h2>
+        <p class="lede anim-in d3" style="margin-top: 18px;">
+          A Wayfinder-inspired indoor navigation experience running natively on Even&nbsp;Realities&nbsp;G2 glasses.
+        </p>
+
+        <div class="s4-features">
+          <div class="feat anim-in d4">
+            <div class="feat-num">01</div>
+            <div class="feat-body">
+              <h4>Select on-glass</h4>
+              <p>FROM and TO pickers driven by the temple touchpad and optional R1 ring. No phone required.</p>
+            </div>
+          </div>
+          <div class="feat anim-in d5">
+            <div class="feat-num">02</div>
+            <div class="feat-body">
+              <h4>Wayfinder-style maps</h4>
+              <p>Hand-composed terminal scenes with POIs, route overlay, and turn-by-turn progression.</p>
+            </div>
+          </div>
+          <div class="feat anim-in d6">
+            <div class="feat-num">03</div>
+            <div class="feat-body">
+              <h4>Runs on real hardware</h4>
+              <p>Packaged as an .ehpk plugin. Ships to the simulator and to the glasses themselves.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="s4-glass anim-scale">
+        <img src="assets/overview.png" alt="WayLens route overview"/>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== SLIDE 5: DEMO · HOME ========== -->
+  <section class="slide demo-slide" data-slide="5">
+    <div class="demo-text">
+      <div class="demo-num anim-in d1">04 · Experience &middot; 01 / 05</div>
+      <h2 class="demo-headline anim-in d2"><em>Press</em><br/>to start.</h2>
+      <p class="demo-caption anim-in d3">On-glass. No phone.</p>
+    </div>
+    <div class="demo-media anim-scale">
+      <img src="assets/home.png" alt="WayLens home screen"/>
+    </div>
+  </section>
+
+  <!-- ========== SLIDE 6: DEMO · FROM ========== -->
+  <section class="slide demo-slide" data-slide="6">
+    <div class="demo-text">
+      <div class="demo-num anim-in d1">04 · Experience &middot; 02 / 05</div>
+      <h2 class="demo-headline anim-in d2">Where<br/>you <em>are.</em></h2>
+      <p class="demo-caption anim-in d3">Swipe. Tap. Done.</p>
+    </div>
+    <div class="demo-media anim-scale">
+      <img src="assets/from-list.png" alt="FROM selection list"/>
+    </div>
+  </section>
+
+  <!-- ========== SLIDE 7: DEMO · TO ========== -->
+  <section class="slide demo-slide" data-slide="7">
+    <div class="demo-text">
+      <div class="demo-num anim-in d1">04 · Experience &middot; 03 / 05</div>
+      <h2 class="demo-headline anim-in d2">Where<br/>you're <em>going.</em></h2>
+      <p class="demo-caption anim-in d3">Gates. Lounges. Food.</p>
+    </div>
+    <div class="demo-media anim-scale">
+      <img src="assets/to-list.png" alt="TO selection list"/>
+    </div>
+  </section>
+
+  <!-- ========== SLIDE 8: DEMO · ROUTE ========== -->
+  <section class="slide demo-slide" data-slide="8">
+    <div class="demo-text">
+      <div class="demo-num anim-in d1">04 · Experience &middot; 04 / 05</div>
+      <h2 class="demo-headline anim-in d2">See the<br/><em>whole path.</em></h2>
+      <p class="demo-caption anim-in d3">Distance · TIME · SECURITY LINES</p>
+    </div>
+    <div class="demo-media anim-scale">
+      <img src="assets/overview.png" alt="Route overview"/>
+    </div>
+  </section>
+
+  <!-- ========== SLIDE 9: DEMO · WALK ========== -->
+  <section class="slide demo-slide" data-slide="9">
+    <div class="demo-text">
+      <div class="demo-num anim-in d1">04 · Experience &middot; 05 / 05</div>
+      <h2 class="demo-headline anim-in d2">Turn by<br/><em>turn.</em></h2>
+      <p class="demo-caption anim-in d3">Heads up. Hands free.</p>
+      <p class="demo-caption anim-in d3">Swipe Up and Down to see each step.</p>
+    </div>
+    <div class="demo-media anim-scale">
+      <img src="assets/step.png" alt="Step-by-step navigation"/>
+    </div>
+  </section>
+
+  <!-- ========== SLIDE 10: DESIGN CONSTRAINTS ========== -->
+  <section class="slide s6" data-slide="6">
+    <div class="s6-grid">
+      <div class="s6-text">
+        <div class="eyebrow anim-in d1">05 · Design for the display</div>
+        <h2 class="headline anim-in d2">
+          Designed <em>for</em><br/>the hardware,<br/>not around it.
+        </h2>
+        <p class="lede anim-in d3" style="font-size: 22px; margin-top: 26px;">
+          The G2 is not a tiny phone. It renders 4-bit greyscale image buffers pushed over BLE to a fixed canvas.
+          Every pixel has to earn its place.
+        </p>
+
+        <dl class="spec-list anim-in d4">
+          <div class="spec"><dt>Display</dt><dd><strong>576 × 288</strong> per eye · 4-bit greyscale</dd></div>
+          <div class="spec"><dt>Transport</dt><dd>BLE image push · bandwidth-budgeted</dd></div>
+          <div class="spec"><dt>Render trick</dt><dd>Compose at <strong>576 × 144</strong>, tile into 2× 288 · full horizontal real estate</dd></div>
+          <div class="spec"><dt>UI primitives</dt><dd>Bespoke monochrome scenes · Distinctively Acuite Wayfinder</dd></div>
+          <div class="spec"><dt>OPTIMIZED</dt><dd>EvenOS is extremely well optimized. Battery life with constant use exceeds 10 hours or 5 days on standby.</dd></div>
+        </dl>
+      </div>
+
+      <div class="display-demo anim-scale">
+        <span class="display-demo-label">G2 FRAME · 576 × 288</span>
+        <div class="display-canvas">
+          <div class="tile" data-label="LEFT EYE · 288">
+            <svg viewBox="0 0 288 144" fill="none">
+              <!-- concourse ceiling line -->
+              <path d="M12 56 Q60 44 140 44 L278 32" stroke="#39ff7a" stroke-width="1.5" opacity="0.7"/>
+              <path d="M12 104 Q60 94 140 94 L278 84" stroke="#39ff7a" stroke-width="1.5" opacity="0.7" stroke-dasharray="4 3"/>
+              <!-- gates -->
+              <rect x="30" y="52" width="22" height="14" stroke="#39ff7a" stroke-width="1" fill="none"/>
+              <text x="41" y="63" font-family="JetBrains Mono" font-size="7" fill="#39ff7a" text-anchor="middle">D1</text>
+              <rect x="78" y="50" width="26" height="14" stroke="#39ff7a" stroke-width="1" fill="none"/>
+              <text x="91" y="61" font-family="JetBrains Mono" font-size="7" fill="#39ff7a" text-anchor="middle">D10</text>
+              <rect x="128" y="48" width="26" height="14" stroke="#39ff7a" stroke-width="1" fill="none"/>
+              <text x="141" y="59" font-family="JetBrains Mono" font-size="7" fill="#39ff7a" text-anchor="middle">D15</text>
+              <rect x="178" y="46" width="26" height="14" stroke="#39ff7a" stroke-width="1" fill="none"/>
+              <text x="191" y="57" font-family="JetBrains Mono" font-size="7" fill="#39ff7a" text-anchor="middle">D20</text>
+              <rect x="228" y="44" width="26" height="14" stroke="#39ff7a" stroke-width="1" fill="none"/>
+              <text x="241" y="55" font-family="JetBrains Mono" font-size="7" fill="#39ff7a" text-anchor="middle">D25</text>
+              <!-- route -->
+              <path d="M92 98 Q100 110 120 108 T180 100 L250 88" stroke="#39ff7a" stroke-width="2.5" fill="none" opacity="0.95"/>
+              <!-- start marker -->
+              <circle cx="92" cy="98" r="5" stroke="#39ff7a" stroke-width="1.5" fill="none"/>
+              <circle cx="92" cy="98" r="2" fill="#39ff7a"/>
+              <!-- label -->
+              <text x="10" y="14" font-family="JetBrains Mono" font-size="7" fill="#39ff7a" letter-spacing="1">MIA · CONCOURSE D</text>
+              <text x="10" y="134" font-family="JetBrains Mono" font-size="6" fill="#39ff7a" opacity="0.7">D30 → STARBUCKS</text>
+            </svg>
+          </div>
+          <div class="tile" data-label="RIGHT EYE · 288">
+            <svg viewBox="0 0 288 144" fill="none">
+              <path d="M10 32 L150 36 Q220 40 278 48" stroke="#39ff7a" stroke-width="1.5" opacity="0.7"/>
+              <path d="M10 84 L150 88 Q220 92 278 100" stroke="#39ff7a" stroke-width="1.5" opacity="0.7" stroke-dasharray="4 3"/>
+              <!-- gates continuing -->
+              <rect x="30" y="42" width="26" height="14" stroke="#39ff7a" stroke-width="1" fill="none"/>
+              <text x="43" y="53" font-family="JetBrains Mono" font-size="7" fill="#39ff7a" text-anchor="middle">D30</text>
+              <rect x="86" y="44" width="26" height="14" stroke="#39ff7a" stroke-width="1" fill="none"/>
+              <text x="99" y="55" font-family="JetBrains Mono" font-size="7" fill="#39ff7a" text-anchor="middle">D40</text>
+              <rect x="142" y="46" width="26" height="14" stroke="#39ff7a" stroke-width="1" fill="none"/>
+              <text x="155" y="57" font-family="JetBrains Mono" font-size="7" fill="#39ff7a" text-anchor="middle">D50</text>
+              <rect x="198" y="48" width="26" height="14" stroke="#39ff7a" stroke-width="1" fill="none"/>
+              <text x="211" y="59" font-family="JetBrains Mono" font-size="7" fill="#39ff7a" text-anchor="middle">D60</text>
+              <!-- route continues -->
+              <path d="M2 80 L40 78 Q80 76 120 72" stroke="#39ff7a" stroke-width="2.5" fill="none" opacity="0.95"/>
+              <!-- destination marker -->
+              <circle cx="120" cy="72" r="6" stroke="#39ff7a" stroke-width="1.5" fill="none"/>
+              <path d="M117 72 L119 75 L123 69" stroke="#39ff7a" stroke-width="1.5" fill="none"/>
+              <text x="120" y="90" font-family="JetBrains Mono" font-size="6" fill="#39ff7a" text-anchor="middle">STARBUCKS</text>
+              <text x="278" y="134" font-family="JetBrains Mono" font-size="6" fill="#39ff7a" opacity="0.7" text-anchor="end">800m · 10min</text>
+            </svg>
+          </div>
+        </div>
+        <div class="display-spec">
+          <span>COMPOSE · 576 × 144</span>
+          <span>TILE · 2× 288</span>
+          <span>GREYSCALE · 4-BIT</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== SLIDE 11: ARCHITECTURE ========== -->
+  <section class="slide s7" data-slide="7">
+    <div class="eyebrow anim-in d1">06 · Under the hood</div>
+    <h2 class="headline s7-headline anim-in d2">
+      Built on the <em>real</em> Even Hub SDK.<br/>
+      Not a mockup. A plugin.
+    </h2>
+
+    <div class="arch">
+      <div class="arch-col anim-in d3" data-layer="LAYER 01">
+        <h4>Runtime</h4>
+        <p class="sub">The plugin shell</p>
+        <ul>
+          <li><strong>TypeScript + Vite.</strong> Modern toolchain, fast iteration.</li>
+          <li>Runs inside the Even Realities <strong>App WebView</strong>.</li>
+          <li>Uses <strong>@evenrealities/even_hub_sdk</strong>.</li>
+          <li>Ships as a packaged <strong>.ehpk</strong> plugin.</li>
+        </ul>
+      </div>
+
+      <div class="arch-col anim-in d4" data-layer="LAYER 02">
+        <h4>Render</h4>
+        <p class="sub">Pixels to the glasses</p>
+        <ul>
+          <li>Scenes composed at <strong>576 × 144</strong>, tiled to both eyes.</li>
+          <li>Pushed as <strong>greyscale image buffers</strong> over BLE.</li>
+          <li>Five bespoke scenes: overview + four turn steps.</li>
+          <li>Readable type, clear POI badges, route hierarchy.</li>
+        </ul>
+      </div>
+
+      <div class="arch-col anim-in d5" data-layer="LAYER 03">
+        <h4>Interaction</h4>
+        <p class="sub">Hands stay off the phone</p>
+        <ul>
+          <li><strong>Click</strong> · confirm and advance.</li>
+          <li><strong>Double click</strong> · go back / home.</li>
+          <li><strong>Swipe up / down</strong> · next / previous step.</li>
+          <li>Temple touchpad primary, <strong>R1 ring</strong> optional.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== SLIDE 12: SCOPE ========== -->
+  <section class="slide s8" data-slide="8">
+    <div class="eyebrow anim-in d1">07 · Honest scope</div>
+    <h2 class="headline s8-headline anim-in d2">
+      What can be <em>demoed</em> today, and what not.
+    </h2>
+
+    <div class="scope-grid">
+      <div class="scope-col in anim-in d3">
+        <h4>In the box</h4>
+        <ul>
+          <li>Full on-glass flow: home → FROM → TO → overview → steps → arrived.</li>
+          <li>MIA Terminal D with subset of curated gates, lounges, food POIs.</li>
+          <li>One real route: <strong style="color: var(--phosphor);">D30 → Starbucks (near D10)</strong>.</li>
+          <li>Five hand-composed Wayfinder-style scenes.</li>
+          <li>Runs in the Even Hub simulator and on real glasses.</li>
+        </ul>
+      </div>
+      <div class="scope-col out anim-in d4">
+        <h4>Out of scope</h4>
+        <ul>
+          <li>Live indoor positioning.</li>
+          <li>Real Wayfinder SDK route stream.</li>
+          <li>Multi-airport or multi-venue support.</li>
+          <li>Real venue data ingestion pipeline.</li>
+          <li>Account, backend, analytics, ops.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== SLIDE 13: FUTURE VISION ========== -->
+  <section class="slide s9" data-slide="9">
+    <div class="eyebrow anim-in d1">08 · Why this is bigger than airports</div>
+    <h2 class="headline s9-headline anim-in d2">
+      Wayfinder <em>everywhere</em><br/>the traveler already looks.
+    </h2>
+
+    <div class="venues">
+      <div class="venue anim-in d3" data-code="01">
+        <div class="glyph">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M4 30 L24 10 L44 30"/>
+            <path d="M8 30 L8 42 L40 42 L40 30"/>
+            <path d="M20 42 L20 32 L28 32 L28 42"/>
+          </svg>
+        </div>
+        <div>
+          <h5>Airports</h5>
+          <p>Gate to gate<br/>Lounge finder</p>
+        </div>
+      </div>
+      <div class="venue anim-in d4" data-code="02">
+        <div class="glyph">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="6" y="8" width="36" height="32"/>
+            <path d="M24 16 L24 32 M16 24 L32 24"/>
+            <path d="M6 20 L42 20" stroke-dasharray="2 2"/>
+          </svg>
+        </div>
+        <div>
+          <h5>Hospitals</h5>
+          <p>Patient &amp; visitor<br/>routing</p>
+        </div>
+      </div>
+      <div class="venue anim-in d6" data-code="03">
+        <div class="glyph">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="4" y="10" width="40" height="28"/>
+            <path d="M12 10 L12 38 M24 10 L24 38 M36 10 L36 38"/>
+            <path d="M4 24 L44 24" stroke-dasharray="2 2"/>
+          </svg>
+        </div>
+        <div>
+          <h5>Conventions</h5>
+          <p>Booth &amp; session<br/>navigation</p>
+        </div>
+      </div>
+      <div class="venue anim-in d7" data-code="04">
+        <div class="glyph">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5">
+            <circle cx="24" cy="24" r="18"/>
+            <path d="M6 24 L42 24 M24 6 L24 42"/>
+            <path d="M24 6 Q34 24 24 42 Q14 24 24 6"/>
+          </svg>
+        </div>
+        <div>
+          <h5>Campuses</h5>
+          <p>Corporate,<br/>university, civic</p>
+        </div>
+      </div>
+      <div class="venue anim-in d5" data-code="05">
+        <div class="glyph">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M8 40 L8 14 L24 6 L40 14 L40 40 Z"/>
+            <rect x="18" y="24" width="12" height="16"/>
+            <path d="M14 20 L18 20 M30 20 L34 20"/>
+          </svg>
+        </div>
+        <div>
+          <h5>Hospitality</h5>
+          <p>Resort, casino,<br/>cruise ship</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== SLIDE 14: CLOSING ========== -->
+  <section class="slide s10" data-slide="10">
+    <div class="s10-grid">
+      <div class="s10-text">
+        <div class="eyebrow anim-in d1">09 · The ask</div>
+        <h2 class="s10-headline anim-in d2">
+          Let's make Wayfinder<br/>
+          the <em>first</em> indoor<br/>
+          navigation on smart glasses.
+        </h2>
+        <div class="s10-sig anim-in d3">
+          <span style="margin-top: 14px;"><strong>THANK YOU</strong> · QUESTIONS WELCOME</span>
+        </div>
+      </div>
+
+      <div class="s10-visual anim-scale">
+        <svg viewBox="0 0 400 400" fill="none" stroke="currentColor" style="color: var(--phosphor);">
+          <g class="ring">
+            <circle cx="200" cy="200" r="180" stroke-width="0.6" stroke-dasharray="2 6" opacity="0.5"/>
+            <circle cx="200" cy="200" r="140" stroke-width="0.8" opacity="0.3"/>
+            <circle cx="200" cy="200" r="100" stroke-width="1" stroke-dasharray="1 3" opacity="0.6"/>
+          </g>
+          <g class="ring slow">
+            <circle cx="200" cy="200" r="160" stroke-width="0.6" stroke-dasharray="4 14" opacity="0.4"/>
+          </g>
+          <!-- WayLens ligature -->
+          <text x="200" y="210" font-family="Fraunces" font-size="64" font-style="italic" font-weight="300" fill="currentColor" text-anchor="middle" letter-spacing="-2">WayLens</text>
+          <text x="200" y="250" font-family="JetBrains Mono" font-size="9" fill="currentColor" text-anchor="middle" letter-spacing="4" opacity="0.8">AMBIENT · HANDS-FREE · HEADS-UP</text>
+          <!-- crosshair center pulse -->
+          <circle cx="200" cy="200" r="4" fill="currentColor">
+            <animate attributeName="r" values="3;8;3" dur="2s" repeatCount="indefinite"/>
+            <animate attributeName="opacity" values="1;0.3;1" dur="2s" repeatCount="indefinite"/>
+          </circle>
+          <!-- compass ticks -->
+          <path d="M200 20 L200 36 M200 364 L200 380 M20 200 L36 200 M364 200 L380 200" stroke-width="1.5"/>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+(() => {
+  const slides = document.querySelectorAll('.slide');
+  const total = slides.length;
+  const counter = document.getElementById('counter');
+  const bar = document.getElementById('progressBar');
+  let idx = 0;
+
+  function go(n) {
+    n = Math.max(0, Math.min(total - 1, n));
+    if (n === idx) return;
+    slides[idx].classList.remove('active');
+    slides[n].classList.add('active');
+    idx = n;
+    update();
+  }
+  function update() {
+    const num = String(idx + 1).padStart(2, '0');
+    const tot = String(total).padStart(2, '0');
+    counter.textContent = `${num} / ${tot}`;
+    bar.style.width = `${((idx + 1) / total) * 100}%`;
+  }
+  update();
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+      e.preventDefault();
+      go(idx + 1);
+    } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+      e.preventDefault();
+      go(idx - 1);
+    } else if (e.key === 'Home') {
+      go(0);
+    } else if (e.key === 'End') {
+      go(total - 1);
+    } else if (e.key === 'f' || e.key === 'F') {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else {
+        document.exitFullscreen().catch(() => {});
+      }
+    }
+  });
+
+  // click-to-advance on right half, back on left half
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('a, button')) return;
+    const mid = window.innerWidth / 2;
+    if (e.clientX > mid) go(idx + 1);
+    else go(idx - 1);
+  });
+
+  // touch
+  let tx = 0;
+  document.addEventListener('touchstart', (e) => { tx = e.touches[0].clientX; }, { passive: true });
+  document.addEventListener('touchend', (e) => {
+    const dx = e.changedTouches[0].clientX - tx;
+    if (Math.abs(dx) > 50) go(idx + (dx < 0 ? 1 : -1));
+  }, { passive: true });
+})();
+</script>
+
+</body>
+</html>
